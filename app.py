@@ -30,7 +30,16 @@ def index():
     user = get_current_user()
     db = get_db()
 
-    questions_cur = db.execute('select questions.id as question_id, questions.question_text, askers.name as asker_name, experts.name as expert_name from questions join users as askers on askers.id = questions.asked_by_id join users as experts on experts.id = questions.experts_id where questions.answer_text is not null')
+    questions_cur = db.execute('''select 
+                                    questions.id as question_id,
+                                    questions.question_text,
+                                    askers.name as asker_name,
+                                    experts.name as expert_name
+                                from questions 
+                                join users as askers on askers.id = questions.asked_by_id 
+                                join users as experts on experts.id = questions.experts_id 
+                                where questions.answer_text is not null''')
+
     questions_result = questions_cur.fetchall()
 
     return render_template('home.html', user=user, questions=questions_result)
@@ -60,6 +69,7 @@ def register():
 @app.route('/login', methods= ['GET','POST'])
 def login():
     user = get_current_user()
+    error = None
     if request.method == 'POST':
 
         db = get_db()
@@ -70,20 +80,32 @@ def login():
         user_cur = db.execute('select id, name, password from users where name = ?',[name])
         user_result = user_cur.fetchone()
 
-        if check_password_hash(user_result['password'], password):
-            session['user'] = user_result['name']
-            return redirect(url_for('index'))
+        if user_result:
+            if check_password_hash(user_result['password'], password):
+                session['user'] = user_result['name']
+                return redirect(url_for('index'))
+            else:
+                error = 'The password is incorrect'    
         else:
-            return '<h1>The password is incorrect</h1>'    
-
-    return render_template('login.html', user=user)
+            error = 'The username is incorrect'
+    
+    return render_template('login.html', user=user, error=error)
 
 @app.route('/question/<question_id>')
 def question(question_id):
     user = get_current_user()
     db = get_db()
 
-    question_cur = db.execute('select questions.question_text, questions.answer_text, askers.name as asker_name, experts.name as expert_name from questions join users as askers on askers.id = questions.asked_by_id join users as experts on experts.id = questions.experts_id where questions.id = ?', [question_id])
+    question_cur = db.execute('''select 
+                                    questions.question_text,
+                                    questions.answer_text,
+                                    askers.name as asker_name,
+                                    experts.name as expert_name 
+                                 from questions 
+                                 join users as askers on askers.id = questions.asked_by_id 
+                                 join users as experts on experts.id = questions.experts_id 
+                                 where questions.id = ?''', [question_id])
+
     question = question_cur.fetchone()
 
 
@@ -121,7 +143,9 @@ def ask():
     db = get_db()
 
     if request.method == 'POST':
-        db.execute('insert into questions (question_text, asked_by_id, experts_id) values (?, ?, ?)', [request.form['question'], user['id'], request.form['expert']])
+        db.execute('''insert into questions (question_text, asked_by_id, experts_id) values (?, ?, ?)'''
+                      ,[request.form['question'], user['id'], request.form['expert']])
+                      
         db.commit()
         return redirect(url_for('index'))
     
@@ -141,7 +165,14 @@ def unanswered():
         return redirect(url_for('index'))        
 
     db = get_db()
-    question_cur = db.execute('select questions.id, questions.question_text, users.name from questions join users on users.id = questions.asked_by_id where questions.answer_text is null and questions.experts_id = ? ', [user['id']])
+    question_cur = db.execute('''select 
+                                    questions.id,
+                                    questions.question_text,
+                                    users.name from questions
+                                 join users on users.id = questions.asked_by_id 
+                                 where questions.answer_text is null 
+                                 and questions.experts_id = ? ''', [user['id']])
+
     questions = question_cur.fetchall()
 
     return render_template('unanswered.html', user=user, questions=questions)
